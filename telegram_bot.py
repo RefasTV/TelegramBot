@@ -3,6 +3,9 @@ import telebot
 from telebot import types
 import db
 
+# test #
+from telegram_bot_calendar import DetailedTelegramCalendar, LSTEP
+
 
 ##### Variables #####
 database = db.DBBot('dataBase.db')
@@ -33,6 +36,7 @@ def start(message):
         bot.send_message(message.from_user.id, "Привет, " + message.from_user.first_name + " " + message.from_user.last_name + ". Я твой бот по расходам! \nПока что я умею только добавлять тебя в базу клиентов, добавлять покупки и выводить их историю, но скоро научусь чему-нибудь еще!", reply_markup=markup)
     except:
         bot.send_message(message.from_user.id, "Привет, Таинсвенный незнакомец! Я твой бот по расходам! \nПока что я умею только добавлять тебя в базу клиентов, добавлять покупки и выводить их историю, но скоро научусь чему-нибудь еще!", reply_markup=markup)
+
 
 # if something is written! #
 @bot.message_handler(content_types=['text'])
@@ -167,42 +171,56 @@ def insert_place(message):
         index = int(message.text)
         if index != -1:
             newAdd.append(place[index][0])
+            initCalendar(message.chat.id)
 
-            msg = bot.send_message(message.chat.id, "Введите дату: ")
-            bot.register_next_step_handler(msg, insert_date)
         else:
             msg = bot.send_message(message.chat.id, "Введите название нового места: ")
             bot.register_next_step_handler(msg, insert_place_by_text)
+
     except:
         msg = bot.send_message(message.chat.id, "Хватит ломать мой код! Напиши что-нибудь если ты больше так не будешь <3 !")
         bot.register_next_step_handler(msg, insert_new_category)
 
 def insert_place_by_text(message):
     newAdd.append(message.text)
-    msg = bot.send_message(message.chat.id, "Введите дату: ")
-    bot.register_next_step_handler(msg, insert_date)
+    initCalendar(message.chat.id)
 
 
+def initCalendar(id):
+    calendar, step = DetailedTelegramCalendar().build()
+    bot.send_message(id,
+                     f"Выберите {LSTEP[step]}",
+                     reply_markup=calendar)
 
 
+@bot.callback_query_handler(func=DetailedTelegramCalendar.func())
+def cal(c):
+    print(c.id, c.message.chat.id)
+    date, key, step = DetailedTelegramCalendar  ().process(c.data)
+    if not date and key:
+        bot.edit_message_text(f"Выберите {LSTEP[step]}",
+                              c.message.chat.id,
+                              c.message.message_id,
+                              reply_markup=key)
+    elif date:
+        bot.edit_message_text(f"Вы выбрали {date}",
+                              c.message.chat.id,
+                              c.message.message_id)
+        
+        global newAdd
+
+        # convert datetime to string # 
+        strdate = date.strftime("%m/%d/%Y")
+        date = strdate
 
 
+        newAdd.append(date)
+        database.add_record(c.message.chat.id, newAdd[0],
+                            newAdd[2], newAdd[1])
+        newAdd = []
+        bot.send_message(c.message.chat.id, "Все отлично, операция прошла успешно!")
 
-
-##### Insert date for new buy #####
-def insert_date(message):
-    global newAdd
-    date = message.text
-    newAdd.append(date)
-    print(newAdd)
-
-    database.add_record(message.from_user.id, newAdd[0], 
-                        newAdd[2], newAdd[1])
-    newAdd = []
-    bot.send_message(message.chat.id, "Все отлично, операция прошла успешно!")
-
-    bot.send_message(message.chat.id, "Могу ли я еще как-то помочь?", reply_markup=get_markup())
-
+        bot.send_message(c.message.chat.id, "Могу ли я еще как-то помочь?", reply_markup=get_markup())
 
 
 ##### Statistic #####
